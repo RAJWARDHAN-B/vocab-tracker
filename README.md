@@ -1,6 +1,6 @@
-# vocab-tracker
+# Fern
 
-A private vocabulary tracker for collecting words and revising them every day.
+A private vocabulary garden for collecting words and revising them every day.
 
 ## Run locally
 

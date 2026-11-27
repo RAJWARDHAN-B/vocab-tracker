@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { LogoutButton } from "@/components/logout-button";
 import { StudyTimer } from "@/components/study-timer";
+import { Topbar } from "@/components/topbar";
 import { isOwnerSignedIn } from "@/lib/auth";
 import { getReviewProgress } from "@/lib/reviews";
 import { localDateKey, REVIEW_TIME_ZONE } from "@/lib/time";
@@ -22,13 +22,7 @@ export default async function HomePage({ searchParams }: Props) {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <Link className="brand" href="/">Vocab<span>Garden</span></Link>
-        <nav className="topbar-actions">
-          <Link className="nav-link" href="/review">Review {dueWords.length > 0 && <span className="nav-count">{dueWords.length}</span>}</Link>
-          <LogoutButton />
-        </nav>
-      </header>
+      <Topbar active="words" dueCount={dueWords.length} />
 
       <section className="welcome-row">
         <div>

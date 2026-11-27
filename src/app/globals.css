@@ -27,14 +27,16 @@ a { color: inherit; text-decoration: none; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 
-.app-shell, .narrow-shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
-.app-shell { padding-bottom: 72px; }
-.narrow-shell { max-width: 760px; padding: 36px 0 72px; }
-.topbar { height: 78px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
-.brand, .login-brand { font-size: 20px; font-weight: 750; letter-spacing: -0.8px; }
-.brand span, .login-brand span { color: var(--green); }
+.app-shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding-bottom: 72px; }
+.narrow-content { max-width: 760px; margin: 0 auto; padding-top: 28px; }
+.review-content { max-width: 860px; margin: 0 auto; }
+.topbar { height: 78px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+.brand, .login-brand { display: inline-flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 750; letter-spacing: -0.6px; }
+.brand-mark { color: var(--green); flex-shrink: 0; }
 .topbar-actions { display: flex; align-items: center; gap: 22px; }
-.nav-link { font-weight: 650; }
+.nav-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 650; transition: color 0.15s; }
+.nav-link:hover { color: var(--ink); }
+.nav-link-active { color: var(--green); }
 .nav-count, .count-badge { border-radius: 99px; background: var(--green-soft); color: var(--green); padding: 4px 9px; font-size: 12px; }
 .welcome-row { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 44px 0 28px; }
 h1, h2, h3, p { margin-top: 0; }
@@ -100,7 +102,6 @@ h3 { margin-bottom: 8px; font-size: 14px; }
 .login-panel h1 { margin-bottom: 8px; font-size: 32px; }
 .login-panel > .muted { margin-bottom: 25px; }
 .login-note { margin-top: 20px; color: var(--muted); font-size: 12px; }
-.review-shell { max-width: 860px; }
 .review-heading { padding: 44px 0 25px; text-align: center; }
 .review-heading h1 { font-size: 38px; }
 .review-column { width: min(680px, 100%); margin: 0 auto; }
@@ -121,10 +122,10 @@ h3 { margin-bottom: 8px; font-size: 14px; }
 .review-actions .button { min-height: 52px; flex: 1; flex-direction: column; align-items: center; }
 
 @media (max-width: 700px) {
-  .app-shell, .narrow-shell { width: min(100% - 28px, 560px); }
+  .app-shell { width: min(100% - 28px, 560px); }
   .topbar { height: 68px; }
-  .topbar-actions { gap: 10px; }
-  .topbar-actions > .muted { display: none; }
+  .topbar-actions { gap: 14px; }
+  .topbar-meta { display: none; }
   .welcome-row { align-items: flex-start; flex-direction: column; padding-top: 34px; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .timer-panel, .stats-panel { min-height: 0; }

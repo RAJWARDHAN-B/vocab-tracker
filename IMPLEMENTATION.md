@@ -1,9 +1,9 @@
-# Vocabulary tracker implementation
+# Fern implementation
 
 ## Status and goal
 
-This document records the implementation and operating assumptions for a
-personal vocabulary app. The owner can add and edit words in the app, and an
+This document records the implementation and operating assumptions for Fern,
+a personal vocabulary app. The owner can add and edit words in the app, and an
 existing AI assistant can add words through an authenticated API.
 
 The vocabulary entry has **two separate fields**, `example` and

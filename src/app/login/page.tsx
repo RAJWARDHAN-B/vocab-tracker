@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { FernMark } from "@/components/fern-mark";
 import { LoginForm } from "@/components/login-form";
 import { isOwnerSignedIn } from "@/lib/auth";
 
@@ -6,7 +7,10 @@ export default async function LoginPage() {
   if (await isOwnerSignedIn()) redirect("/");
   return (
     <main className="login-shell">
-      <div className="login-brand">Vocab<span>Garden</span></div>
+      <div className="login-brand">
+        <FernMark className="brand-mark" size={26} />
+        <span>Fern</span>
+      </div>
       <section className="panel login-panel">
         <p className="eyebrow">A quiet place to learn</p>
         <h1>Welcome back.</h1>
