@@ -168,12 +168,18 @@ or use an unrestricted server-side image proxy. External hosts can remove
 images or restrict embedding, and loading an image contacts that host. Keep
 attribution when required and use images under suitable licenses.
 
-## Assistant import API
+## Assistant agent API
 
-### Authentication
+### Endpoints and authentication
 
-- Proposed endpoint: `POST /api/words`.
-- The assistant sends `Authorization: Bearer <API_KEY>` over HTTPS.
+- Discovery, schema, and instructions: `GET /api/agent` (JSON by default;
+  `?format=markdown` or `Accept: text/markdown` for Markdown).
+- List/search saved words: `GET /api/agent/words` (`?q=`, `?limit=`, `?offset=`).
+- Fetch a single word by UUID or normalized spelling:
+  `GET /api/agent/words/:id_or_word`.
+- Batch upload words: `POST /api/agent/words` (with `POST /api/words` retained
+  as a compatible alias).
+- All assistant endpoints require `Authorization: Bearer <API_KEY>` over HTTPS.
 - Generate a long random key, store it as a server-only Vercel environment
   variable, and provide it to the assistant through its secure secret storage.
   Do not put the key in source control, frontend bundles, examples, or a
@@ -182,8 +188,9 @@ attribution when required and use images under suitable licenses.
   missing or invalid key with `401` before processing the request.
 - Support key rotation by updating the server secret and assistant secret.
   Never log the key, authorization header, or full secret-bearing request.
-- Apply an appropriate request-size limit and a persistent rate limit before
-  exposing the endpoint publicly; an in-memory counter is not reliable across
+- Apply an appropriate request-size limit and persistent libSQL rate limits
+  before exposing the endpoints publicly (60 import requests/hour and 180 read
+  requests/hour per key); an in-memory counter is not reliable across
   serverless instances.
 
 ### Request shape
