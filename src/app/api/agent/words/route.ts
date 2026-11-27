@@ -10,7 +10,12 @@ import {
   AGENT_LIST_MAX_LIMIT,
 } from "@/lib/agent-spec";
 import { checkAgentReadRateLimit } from "@/lib/rate-limit";
+import { WORD_TAGS, type WordTag } from "@/lib/validation";
 import { listWordsPaginated, serializeWordForAgent } from "@/lib/words";
+
+function isWordTag(value: string): value is WordTag {
+  return (WORD_TAGS as readonly string[]).includes(value);
+}
 
 function parseBoundedInt(
   raw: string | null,
@@ -70,9 +75,24 @@ export async function GET(request: Request) {
       );
     }
 
+    const rawTag = searchParams.get("tag")?.trim() ?? "";
+    let tag: WordTag | undefined;
+    if (rawTag) {
+      if (!isWordTag(rawTag)) {
+        return NextResponse.json(
+          {
+            error: `Invalid tag parameter. Allowed values: ${WORD_TAGS.join(", ")}.`,
+          },
+          { status: 400, headers: rateLimitHeaders(rateLimit) },
+        );
+      }
+      tag = rawTag;
+    }
+
     const search = (searchParams.get("q") ?? "").slice(0, 100);
     const { items, total } = await listWordsPaginated({
       search,
+      tag,
       limit,
       offset,
     });

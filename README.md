@@ -25,11 +25,16 @@ All assistant endpoints require `Authorization: Bearer <ASSISTANT_API_KEY>`:
   limits, and editorial instructions for the agent. Returns JSON by default; pass
   `?format=markdown` (or `Accept: text/markdown`) for a Markdown guide.
 - `GET /api/agent/words` — Lists saved words in reverse chronological order with
-  optional `?q=<search>`, `?limit=<1-100>` (default `50`), and `?offset=<>=0>`.
+  optional `?q=<search>`, `?tag=<tag>`, `?limit=<1-100>` (default `50`), and
+  `?offset=<>=0>`.
 - `GET /api/agent/words/:id_or_word` — Looks up a single word by UUID or
   normalized spelling (`trim`, Unicode NFKC, lowercase).
 - `POST /api/agent/words` (alias: `POST /api/words`) — Batch-uploads 1 to 50
   vocabulary entries in a `{ "words": [...] }` JSON body.
+
+Each word also supports an optional `tag` field constrained to: `noun`, `verb`,
+`adjective`, `adverb`, `pronoun`, `preposition`, `conjunction`, `interjection`,
+`idiom`, or `phrase` (or `null` / omitted).
 
 The batch limit is 50 entries; the request body limit is 256 KiB. Required
 strings are limited to 200 characters for `word` and 2,000 for `meaning`,

@@ -3,9 +3,9 @@ import {
   IMPORT_RATE_LIMIT_MAX,
   RATE_LIMIT_WINDOW_SECONDS,
 } from "@/lib/rate-limit";
-import { WORD_LIMITS } from "@/lib/validation";
+import { WORD_LIMITS, WORD_TAGS, type WordTag } from "@/lib/validation";
 
-export const AGENT_SPEC_VERSION = "1.0.0";
+export const AGENT_SPEC_VERSION = "1.1.0";
 export const AGENT_LIST_DEFAULT_LIMIT = 50;
 export const AGENT_LIST_MAX_LIMIT = 100;
 
@@ -52,6 +52,7 @@ export type AgentSpec = {
     list_item_max_length: number;
     image_url_max_length: number;
     image_caption_max_length: number;
+    allowed_tags: readonly WordTag[];
     list_default_limit: number;
     list_max_limit: number;
     import_requests_per_hour: number;
@@ -66,6 +67,7 @@ export type AgentSpec = {
     workflow: string[];
     field_guidelines: Record<
       | "word"
+      | "tag"
       | "meaning"
       | "synonyms"
       | "antonyms"
@@ -117,6 +119,13 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
         maxLength: WORD_LIMITS.wordMaxLength,
         description:
           "Required display spelling (trimmed; non-empty). Used to compute normalized_word for duplicate detection.",
+      },
+      tag: {
+        anyOf: [
+          { type: "string", enum: [...WORD_TAGS] },
+          { type: "null" },
+        ],
+        description: `Optional part-of-speech / lexical tag. Must be one of: ${WORD_TAGS.join(", ")}, or null (omit if unknown).`,
       },
       meaning: {
         type: "string",
@@ -249,6 +258,7 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
       "id",
       "word",
       "normalized_word",
+      "tag",
       "meaning",
       "synonyms",
       "antonyms",
@@ -265,6 +275,12 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
       id: { type: "string", format: "uuid" },
       word: { type: "string" },
       normalized_word: { type: "string" },
+      tag: {
+        anyOf: [
+          { type: "string", enum: [...WORD_TAGS] },
+          { type: "null" },
+        ],
+      },
       meaning: { type: "string" },
       synonyms: { type: "array", items: { type: "string" } },
       antonyms: { type: "array", items: { type: "string" } },
@@ -338,11 +354,12 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
         },
         query_parameters: {
           q: "Optional search string matched against word and normalized_word (truncated to 100 chars).",
+          tag: `Optional exact tag filter. Must be one of: ${WORD_TAGS.join(", ")}.`,
           limit: `Optional integer between 1 and ${AGENT_LIST_MAX_LIMIT} (default ${AGENT_LIST_DEFAULT_LIMIT}).`,
           offset: "Optional non-negative integer offset (default 0).",
         },
         response_summary:
-          "200 OK with { words: WordRecord[], total: number, limit: number, offset: number }. 400 on invalid pagination parameters.",
+          "200 OK with { words: WordRecord[], total: number, limit: number, offset: number }. 400 on invalid tag or pagination parameters.",
       },
       {
         method: "POST",
@@ -388,6 +405,7 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
       list_item_max_length: WORD_LIMITS.listItemMaxLength,
       image_url_max_length: WORD_LIMITS.imageUrlMaxLength,
       image_caption_max_length: WORD_LIMITS.imageCaptionMaxLength,
+      allowed_tags: WORD_TAGS,
       list_default_limit: AGENT_LIST_DEFAULT_LIMIT,
       list_max_limit: AGENT_LIST_MAX_LIMIT,
       import_requests_per_hour: IMPORT_RATE_LIMIT_MAX,
@@ -411,6 +429,7 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
       field_guidelines: {
         word:
           "Use the canonical base form (lemma) in natural casing (e.g., 'ephemeral', 'ubiquitous'). Trim surrounding whitespace and omit pronunciation guides or trailing punctuation.",
+        tag: `Optional single part-of-speech / lexical tag matching the sense in 'meaning'. Allowed lowercase values only: ${WORD_TAGS.join(", ")}. Pass null or omit if none applies.`,
         meaning:
           "Write a clear, concise 1-2 sentence definition in plain English capturing the primary sense the learner should retain. Avoid circular definitions that repeat the target word.",
         synonyms:
@@ -446,6 +465,7 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
         words: [
           {
             word: "ephemeral",
+            tag: "adjective",
             meaning: "Lasting for a very short time; quickly passing away.",
             synonyms: ["fleeting", "transient", "brief"],
             antonyms: ["enduring", "lasting", "permanent"],
@@ -457,6 +477,7 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
           },
           {
             word: "laconic",
+            tag: "adjective",
             meaning: "Using very few words; concise to the point of seeming terse.",
             synonyms: ["concise", "terse", "succinct"],
             antonyms: ["verbose", "wordy", "loquacious"],
@@ -496,6 +517,7 @@ export function buildAgentSpec(baseUrl = ""): AgentSpec {
         id: "11111111-2222-4333-8444-555555555555",
         word: "ephemeral",
         normalized_word: "ephemeral",
+        tag: "adjective",
         meaning: "Lasting for a very short time; quickly passing away.",
         synonyms: ["fleeting", "transient", "brief"],
         antonyms: ["enduring", "lasting", "permanent"],
@@ -593,6 +615,7 @@ export function renderAgentSpecMarkdown(spec: AgentSpec): string {
     `- **Max words per batch:** ${spec.limits.max_batch_size}`,
     `- **Field max lengths:** \`word\` ${spec.limits.word_max_length}, \`meaning\` ${spec.limits.meaning_max_length}, \`example\` ${spec.limits.example_max_length}, \`in_a_sentence\` ${spec.limits.in_a_sentence_max_length}, \`image_url\` ${spec.limits.image_url_max_length}, \`image_caption\` ${spec.limits.image_caption_max_length}`,
     `- **List limits:** up to ${spec.limits.list_max_items} items per \`synonyms\`/\`antonyms\` array, max ${spec.limits.list_item_max_length} chars each`,
+    `- **Allowed \`tag\` values (optional):** ${spec.limits.allowed_tags.map((tag) => `\`${tag}\``).join(", ")}`,
     `- **Duplicate normalization:** \`${spec.duplicate_detection.normalization}\` — ${spec.duplicate_detection.behavior}`,
     "",
     "## JSON Schemas (Draft 2020-12)",

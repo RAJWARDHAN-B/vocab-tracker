@@ -5,16 +5,20 @@ import { Topbar } from "@/components/topbar";
 import { isOwnerSignedIn } from "@/lib/auth";
 import { getReviewProgress } from "@/lib/reviews";
 import { localDateKey, REVIEW_TIME_ZONE } from "@/lib/time";
+import { WORD_TAGS, type WordTag } from "@/lib/validation";
 import { listDueWords, listWords } from "@/lib/words";
 
-type Props = { searchParams: Promise<{ q?: string }> };
+type Props = { searchParams: Promise<{ q?: string; tag?: string }> };
 
 export default async function HomePage({ searchParams }: Props) {
   if (!(await isOwnerSignedIn())) redirect("/login");
 
-  const { q = "" } = await searchParams;
+  const { q = "", tag: rawTag = "" } = await searchParams;
+  const activeTag = (WORD_TAGS as readonly string[]).includes(rawTag)
+    ? (rawTag as WordTag)
+    : undefined;
   const [words, dueWords, progress] = await Promise.all([
-    listWords(q),
+    listWords(q, activeTag),
     listDueWords(),
     getReviewProgress(),
   ]);
@@ -55,7 +59,15 @@ export default async function HomePage({ searchParams }: Props) {
           </div>
           <form action="/" className="search-form">
             <input aria-label="Search words" name="q" placeholder="Search words..." defaultValue={q} />
-            <button className="button button-secondary">Search</button>
+            <select aria-label="Filter by tag" name="tag" defaultValue={activeTag ?? ""}>
+              <option value="">All tags</option>
+              {WORD_TAGS.map((option) => (
+                <option key={option} value={option}>
+                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                </option>
+              ))}
+            </select>
+            <button className="button button-secondary">Filter</button>
           </form>
         </div>
         {words.length ? (
@@ -63,7 +75,10 @@ export default async function HomePage({ searchParams }: Props) {
             {words.map((word) => (
               <Link className="word-tile" href={`/words/${word.id}`} key={word.id}>
                 <span className="word-tile-arrow">↗</span>
-                <h3>{word.word}</h3>
+                <div className="word-tile-header">
+                  <h3>{word.word}</h3>
+                  {word.tag && <span className="word-tag">{word.tag}</span>}
+                </div>
                 <p>{word.meaning}</p>
                 <span className="word-meta">
                   {word.nextReviewAt <= new Date().toISOString() ? "Due for review" : `Next: ${new Date(word.nextReviewAt).toLocaleDateString("en-IN", { timeZone: REVIEW_TIME_ZONE })}`}
@@ -74,9 +89,9 @@ export default async function HomePage({ searchParams }: Props) {
         ) : (
           <div className="panel empty-state">
             <span className="empty-icon">✦</span>
-            <h2>{q ? "No words match that search." : "Your collection starts here."}</h2>
-            <p className="muted">{q ? "Try a different spelling or meaning." : "Add a word you want to remember."}</p>
-            {!q && <Link className="button button-primary" href="/words/new">Add your first word</Link>}
+            <h2>{q || activeTag ? "No words match that filter." : "Your collection starts here."}</h2>
+            <p className="muted">{q || activeTag ? "Try a different search or tag." : "Add a word you want to remember."}</p>
+            {!q && !activeTag && <Link className="button button-primary" href="/words/new">Add your first word</Link>}
           </div>
         )}
       </section>

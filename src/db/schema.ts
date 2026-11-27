@@ -7,6 +7,7 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+import { WORD_TAGS } from "@/lib/validation";
 
 export const words = sqliteTable(
   "words",
@@ -14,6 +15,7 @@ export const words = sqliteTable(
     id: text("id").primaryKey(),
     word: text("word").notNull(),
     normalizedWord: text("normalized_word").notNull(),
+    tag: text("tag", { enum: WORD_TAGS }),
     meaning: text("meaning").notNull(),
     synonyms: text("synonyms", { mode: "json" }).$type<string[]>().notNull(),
     antonyms: text("antonyms", { mode: "json" }).$type<string[]>().notNull(),
@@ -29,6 +31,7 @@ export const words = sqliteTable(
   (table) => [
     uniqueIndex("words_normalized_word_unique").on(table.normalizedWord),
     index("words_next_review_at_idx").on(table.nextReviewAt),
+    index("words_tag_idx").on(table.tag),
   ],
 );
 

@@ -6,6 +6,7 @@ import Link from "next/link";
 type ReviewWord = {
   id: string;
   word: string;
+  tag: string | null;
   meaning: string;
   synonyms: string[];
   antonyms: string[];
@@ -62,7 +63,10 @@ export function ReviewDeck({ words }: { words: ReviewWord[] }) {
         Card {words.length - remainingWords.length + 1} of {words.length}
       </p>
       <article className="panel review-card">
-        <p className="eyebrow">Vocabulary</p>
+        <div className="review-card-meta">
+          <p className="eyebrow">Vocabulary</p>
+          {current.tag && <span className="word-tag">{current.tag}</span>}
+        </div>
         <h2 className="review-word">{current.word}</h2>
         {revealed ? (
           <div className="answer-content">

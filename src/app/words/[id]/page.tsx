@@ -27,6 +27,7 @@ export default async function EditWordPage({ params }: Props) {
           <WordForm initialWord={{
             id: word.id,
             word: word.word,
+            tag: word.tag,
             meaning: word.meaning,
             synonyms: word.synonyms,
             antonyms: word.antonyms,

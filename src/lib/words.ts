@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, like, lte, ne, or } from "drizzle-orm";
 import { db, enableForeignKeys } from "@/db/client";
 import { words } from "@/db/schema";
-import { normalizeWord, toWordInput, type WordInput } from "@/lib/validation";
+import { normalizeWord, toWordInput, type WordInput, type WordTag } from "@/lib/validation";
 
 export type WordRow = typeof words.$inferSelect;
 
@@ -10,6 +10,7 @@ export type AgentWordRecord = {
   id: string;
   word: string;
   normalized_word: string;
+  tag: WordTag | null;
   meaning: string;
   synonyms: string[];
   antonyms: string[];
@@ -28,6 +29,7 @@ export function serializeWordForAgent(row: WordRow): AgentWordRecord {
     id: row.id,
     word: row.word,
     normalized_word: row.normalizedWord,
+    tag: row.tag,
     meaning: row.meaning,
     synonyms: row.synonyms,
     antonyms: row.antonyms,
@@ -126,30 +128,44 @@ export async function getWordByIdOrSpelling(identifier: string) {
   return bySpelling[0] ?? null;
 }
 
-export async function listWords(search = "") {
+export async function listWords(search = "", tag?: WordTag) {
   await enableForeignKeys();
   const query = search.trim();
+  const conditions = [];
+  if (query) conditions.push(like(words.word, `%${query}%`));
+  if (tag) conditions.push(eq(words.tag, tag));
+  const filter =
+    conditions.length > 1 ? and(...conditions) : conditions[0];
   return db
     .select()
     .from(words)
-    .where(query ? like(words.word, `%${query}%`) : undefined)
+    .where(filter)
     .orderBy(desc(words.createdAt));
 }
 
 export async function listWordsPaginated(options: {
   search?: string;
+  tag?: WordTag;
   limit: number;
   offset: number;
 }) {
   await enableForeignKeys();
   const query = (options.search ?? "").trim();
   const normalizedQuery = normalizeWord(query);
-  const filter = query
-    ? or(
+  const conditions = [];
+  if (query) {
+    conditions.push(
+      or(
         like(words.word, `%${query}%`),
         like(words.normalizedWord, `%${normalizedQuery}%`),
-      )
-    : undefined;
+      ),
+    );
+  }
+  if (options.tag) {
+    conditions.push(eq(words.tag, options.tag));
+  }
+  const filter =
+    conditions.length > 1 ? and(...conditions) : conditions[0];
 
   const [items, totalRows] = await Promise.all([
     db

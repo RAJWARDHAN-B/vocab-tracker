@@ -1,5 +1,20 @@
 import { z } from "zod";
 
+export const WORD_TAGS = [
+  "noun",
+  "verb",
+  "adjective",
+  "adverb",
+  "pronoun",
+  "preposition",
+  "conjunction",
+  "interjection",
+  "idiom",
+  "phrase",
+] as const;
+
+export type WordTag = (typeof WORD_TAGS)[number];
+
 export const WORD_LIMITS = {
   maxBodyBytes: 256 * 1024,
   maxBatchSize: 50,
@@ -29,6 +44,7 @@ const optionalImageUrl = z
 
 const wordFields = {
   word: requiredText(WORD_LIMITS.wordMaxLength),
+  tag: z.union([z.enum(WORD_TAGS), z.null()]).optional(),
   meaning: requiredText(WORD_LIMITS.meaningMaxLength),
   synonyms: z
     .array(requiredText(WORD_LIMITS.listItemMaxLength))
@@ -62,6 +78,7 @@ export function normalizeWord(word: string) {
 export function toWordInput(value: WordInput) {
   return {
     word: value.word,
+    tag: value.tag ?? null,
     meaning: value.meaning,
     synonyms: value.synonyms,
     antonyms: value.antonyms,

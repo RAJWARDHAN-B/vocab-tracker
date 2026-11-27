@@ -37,6 +37,34 @@ describe("word input", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts optional enum tags and rejects unsupported tag values", () => {
+    const omitted = wordInputSchema.parse({
+      word: "sample",
+      meaning: "A sample.",
+      example: "An example.",
+      in_a_sentence: "A sentence.",
+    });
+    expect(toWordInput(omitted).tag).toBeNull();
+
+    const valid = wordInputSchema.parse({
+      word: "sprint",
+      tag: "verb",
+      meaning: "Run at full speed over a short distance.",
+      example: "Sprint to the finish line.",
+      in_a_sentence: "She had to sprint to catch the last train.",
+    });
+    expect(toWordInput(valid).tag).toBe("verb");
+
+    const invalid = wordInputSchema.safeParse({
+      word: "sprint",
+      tag: "slang",
+      meaning: "Run fast.",
+      example: "Sprint.",
+      in_a_sentence: "She will sprint.",
+    });
+    expect(invalid.success).toBe(false);
+  });
 });
 
 describe("daily progress time boundaries", () => {

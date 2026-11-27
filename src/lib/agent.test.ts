@@ -22,6 +22,7 @@ import { POST as postLegacyWords } from "@/app/api/words/route";
 import {
   importRequestSchema,
   WORD_LIMITS,
+  WORD_TAGS,
   wordInputSchema,
 } from "@/lib/validation";
 
@@ -36,6 +37,7 @@ function authHeaders(extra?: Record<string, string>) {
 
 const sampleWord = {
   word: "Ephemeral",
+  tag: "adjective" as const,
   meaning: "Lasting for a very short time.",
   synonyms: ["fleeting", "transient"],
   antonyms: ["enduring", "lasting"],
@@ -119,6 +121,7 @@ describe("GET /api/agent", () => {
     expect(spec.authentication.required_on_all_endpoints).toBe(true);
     expect(spec.limits.max_batch_size).toBe(WORD_LIMITS.maxBatchSize);
     expect(spec.limits.max_body_bytes).toBe(WORD_LIMITS.maxBodyBytes);
+    expect(spec.limits.allowed_tags).toEqual([...WORD_TAGS]);
     expect(spec.endpoints.map((e: { path: string }) => e.path)).toEqual([
       "/api/agent",
       "/api/agent/words",
@@ -181,9 +184,10 @@ describe("Agent word upload, list, search, and lookup", () => {
             sampleWord,
             // Duplicate via Unicode NFKC + case variant in same batch
             { ...sampleWord, word: "  ｅｐｈｅｍｅｒａｌ " },
-            // Invalid: missing in_a_sentence
+            // Invalid: unsupported tag + missing in_a_sentence
             {
               word: "laconic",
+              tag: "unknown_pos",
               meaning: "Using very few words.",
               example: "A laconic reply.",
             },
@@ -200,7 +204,9 @@ describe("Agent word upload, list, search, and lookup", () => {
     expect(typeof body.results[0].id).toBe("string");
     expect(body.results[1]).toMatchObject({ index: 1, status: "duplicate" });
     expect(body.results[2]).toMatchObject({ index: 2, status: "invalid" });
-    expect(body.results[2].errors[0].field).toBe("in_a_sentence");
+    expect(body.results[2].errors.map((e: { field: string }) => e.field)).toEqual(
+      expect.arrayContaining(["tag", "in_a_sentence"]),
+    );
 
     // Verify GET /api/agent/words/[id] works by UUID and by normalized spelling
     const createdId = body.results[0].id as string;
@@ -216,6 +222,7 @@ describe("Agent word upload, list, search, and lookup", () => {
       id: createdId,
       word: "Ephemeral",
       normalized_word: "ephemeral",
+      tag: "adjective",
       example: sampleWord.example,
       in_a_sentence: sampleWord.in_a_sentence,
       synonyms: sampleWord.synonyms,
@@ -251,12 +258,13 @@ describe("Agent word upload, list, search, and lookup", () => {
           words: [
             sampleWord,
             {
-              word: "Laconic",
-              meaning: "Using very few words.",
-              synonyms: ["terse"],
-              antonyms: ["verbose"],
-              example: "A laconic shrug.",
-              in_a_sentence: "His laconic email settled the debate in one line.",
+              word: "Mitigate",
+              tag: "verb",
+              meaning: "Make less severe, serious, or painful.",
+              synonyms: ["alleviate"],
+              antonyms: ["aggravate"],
+              example: "Mitigate the risk of delays.",
+              in_a_sentence: "Early testing helped mitigate the impact of the outage.",
             },
           ],
         }),
@@ -277,14 +285,34 @@ describe("Agent word upload, list, search, and lookup", () => {
     expect(listBody.words).toHaveLength(1);
 
     const searchRes = await listAgentWords(
-      new Request("http://localhost:3000/api/agent/words?q=lacon", {
+      new Request("http://localhost:3000/api/agent/words?q=mitig", {
         headers: authHeaders(),
       }),
     );
     expect(searchRes.status).toBe(200);
     const searchBody = await searchRes.json();
     expect(searchBody.total).toBe(1);
-    expect(searchBody.words[0].word).toBe("Laconic");
+    expect(searchBody.words[0].word).toBe("Mitigate");
+
+    const byTagRes = await listAgentWords(
+      new Request("http://localhost:3000/api/agent/words?tag=adjective", {
+        headers: authHeaders(),
+      }),
+    );
+    expect(byTagRes.status).toBe(200);
+    const byTagBody = await byTagRes.json();
+    expect(byTagBody.total).toBe(1);
+    expect(byTagBody.words[0]).toMatchObject({
+      word: "Ephemeral",
+      tag: "adjective",
+    });
+
+    const badTag = await listAgentWords(
+      new Request("http://localhost:3000/api/agent/words?tag=not_a_pos", {
+        headers: authHeaders(),
+      }),
+    );
+    expect(badTag.status).toBe(400);
 
     const badLimit = await listAgentWords(
       new Request("http://localhost:3000/api/agent/words?limit=500", {

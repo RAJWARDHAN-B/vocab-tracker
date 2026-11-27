@@ -78,6 +78,7 @@ reasonable option, but is not yet a requirement.
 | `id` | `TEXT` | Primary key, generated UUID. |
 | `word` | `TEXT` | Required display spelling. |
 | `normalized_word` | `TEXT` | Required unique duplicate-detection key. |
+| `tag` | `TEXT`, nullable | Optional part-of-speech / lexical tag (`noun`, `verb`, `adjective`, `adverb`, `pronoun`, `preposition`, `conjunction`, `interjection`, `idiom`, `phrase`). |
 | `meaning` | `TEXT` | Required meaning. |
 | `synonyms` | `TEXT` | JSON array of strings; may be empty. |
 | `antonyms` | `TEXT` | JSON array of strings; may be empty. |
@@ -174,7 +175,7 @@ attribution when required and use images under suitable licenses.
 
 - Discovery, schema, and instructions: `GET /api/agent` (JSON by default;
   `?format=markdown` or `Accept: text/markdown` for Markdown).
-- List/search saved words: `GET /api/agent/words` (`?q=`, `?limit=`, `?offset=`).
+- List/search saved words: `GET /api/agent/words` (`?q=`, `?tag=`, `?limit=`, `?offset=`).
 - Fetch a single word by UUID or normalized spelling:
   `GET /api/agent/words/:id_or_word`.
 - Batch upload words: `POST /api/agent/words` (with `POST /api/words` retained

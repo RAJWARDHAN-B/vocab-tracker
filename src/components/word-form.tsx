@@ -2,11 +2,12 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { WordInput } from "@/lib/validation";
+import { WORD_TAGS, type WordInput, type WordTag } from "@/lib/validation";
 
 type InitialWord = {
   id: string;
   word: string;
+  tag: WordTag | null;
   meaning: string;
   synonyms: string[];
   antonyms: string[];
@@ -21,6 +22,7 @@ type Props = { initialWord?: InitialWord };
 export function WordForm({ initialWord }: Props) {
   const router = useRouter();
   const [word, setWord] = useState(initialWord?.word ?? "");
+  const [tag, setTag] = useState<WordTag | "">(initialWord?.tag ?? "");
   const [meaning, setMeaning] = useState(initialWord?.meaning ?? "");
   const [synonyms, setSynonyms] = useState(initialWord?.synonyms.join(", ") ?? "");
   const [antonyms, setAntonyms] = useState(initialWord?.antonyms.join(", ") ?? "");
@@ -39,6 +41,7 @@ export function WordForm({ initialWord }: Props) {
     setFieldErrors({});
     const payload: WordInput = {
       word,
+      tag: tag || null,
       meaning,
       synonyms: synonyms.split(",").map((item) => item.trim()).filter(Boolean),
       antonyms: antonyms.split(",").map((item) => item.trim()).filter(Boolean),
@@ -82,6 +85,21 @@ export function WordForm({ initialWord }: Props) {
         Word
         <input required maxLength={200} value={word} onChange={(event) => setWord(event.target.value)} />
         {fieldErrors.word && <span className="field-error">{fieldErrors.word}</span>}
+      </label>
+      <label>
+        Tag <span className="label-hint">optional part of speech</span>
+        <select
+          value={tag}
+          onChange={(event) => setTag(event.target.value as WordTag | "")}
+        >
+          <option value="">None</option>
+          {WORD_TAGS.map((option) => (
+            <option key={option} value={option}>
+              {option.charAt(0).toUpperCase() + option.slice(1)}
+            </option>
+          ))}
+        </select>
+        {fieldErrors.tag && <span className="field-error">{fieldErrors.tag}</span>}
       </label>
       <label>
         Meaning
