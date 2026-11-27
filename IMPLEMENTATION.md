@@ -149,6 +149,291 @@ server's implicit local time zone. The dashboard also has one five-minute
 study timer per day, resetting at local midnight. Timer completion is stored
 server-side and is separate from the review-event count and streak.
 
+## Interactive practice roadmap
+
+### Status and objective
+
+**Planning only:** the following phases are proposed, not implemented. They
+extend Fern with short, varied, visual vocabulary exercises inspired by the
+interaction patterns in the supplied reference: choosing a picture, completing
+a phrase with word tiles, and spelling with letter tiles. Use Fern's own
+branding, assets, and layouts rather than copying another app's artwork or
+interface.
+
+The current app already provides a searchable word collection, optional
+part-of-speech tags, a reveal-and-rate review deck, a daily focus timer, and an
+assistant import API. The new practice experience uses those saved words; it is
+not a translation course and does not require the assistant or a paid AI
+service at practice time.
+
+**Proposed defaults, subject to owner feedback:**
+
+- Offer a separate **Practice** entry point alongside the existing review.
+  Choose all words or a part-of-speech tag; optionally prioritize due words.
+- Start with a finite session of up to 10 answerable questions. Allow the user
+  to finish early; do not impose a time limit or block future practice.
+- Practice attempts and summaries are separate from spaced-repetition reviews.
+  They do **not** create `reviews`, change review schedules or streaks, or
+  complete the existing five-minute focus timer. Keep all existing behavior.
+- Resume an unfinished session after a refresh or on another device. Only one
+  active practice session is allowed for this single-owner app; starting another
+  offers resume or explicit abandonment, not silent replacement.
+- Use the word's existing content. Do not invent examples, image URLs,
+  translations, or audio. A word can participate in some modes even when other
+  modes are unavailable.
+
+### Exercise catalogue
+
+Each exercise includes a prompt, selectable or typed answer, explicit feedback,
+the correct answer after an incorrect attempt, and a way to continue. Randomize
+choice order; never use color alone to convey correctness. Display the word's
+tag when present. Exercise generation must be deterministic after a question is
+created, including its answer choices and order, so a resumed session presents
+the same question.
+
+| Mode | Prompt and interaction | Eligibility and safe fallback |
+| --- | --- | --- |
+| Meaning choice | Show a word and ask the learner to choose its meaning from one correct answer and three distractors from other words. | Require four distinct, non-empty normalized meanings. Prefer the same tag for distractors when available, but allow other tags. Avoid duplicates and identical-looking choices; if unavailable, choose another eligible mode. |
+| Word choice | Show a meaning and ask the learner to select the corresponding word from four word choices. | Require four distinct normalized spellings. Do not offer this mode if another option has the same normalized meaning as the prompt or if the choices would reveal multiple valid answers. |
+| Spelling | Show the meaning and optionally the tag; assemble the word with shuffled letter tiles, with an accessible text-input alternative. | Use Unicode grapheme clusters, not UTF-16 code units, for tiles. Preserve spaces, punctuation and repeated letters; permit entry and correction without a drag gesture. Initially restrict tiles to words for which this is unambiguous and practical (for example, short single words); offer text input or another mode for other entries. |
+| Sentence completion | Show `in_a_sentence` with one exact whole-word occurrence of the target blanked; choose the missing word from four choices. | Generate only when a case-insensitive, boundary-aware match is safe and the sentence has exactly one match. Preserve the original sentence for feedback; never rewrite it or substitute `example`. Skip inflections, ambiguous matches and sentences that do not contain the stored spelling. |
+| Synonym or antonym choice | Ask for a synonym or antonym of the word; select one stored relation from four choices. | Require a non-empty relevant list and three distinct distractors that are neither the target nor any stored synonym or antonym. Use normalized comparisons; do not claim generated distractors are guaranteed semantically wrong. Disable the question when safe choices cannot be established. |
+| Picture choice | Show a word and choose its matching image among four labeled images. | Require four distinct saved HTTPS image URLs with meaningful alternative text or captions and enough unambiguous options. Load only in the browser, never proxy or fetch image URLs on the server. If any image fails or has unsuitable attribution, replace the exercise with an eligible text mode; never guess an image. |
+
+Modes are suggestions for implementation, not a promise that every saved word
+is eligible. Prioritize unambiguous questions; when data cannot establish a
+single correct answer, omit the question. Start with meaning/word choice and
+spelling, then add the remaining modes in later phases.
+
+### Shared session design
+
+#### Selection and exercise generation
+
+1. Fetch the selected collection on the server. The optional tag filter uses
+   the existing `words.tag` enum; untagged words remain usable when no tag is
+   selected. The proposed default order mixes due and other saved words, with
+   due words first when the user chooses that option.
+2. Build an eligibility pool per mode and select at most 10 questions from it.
+   The scope determines target words; distractors may come from the full
+   collection so a small tag-filtered collection can still yield valid choices.
+   Prefer different targets and modes; never promise a fixed exercise mix.
+3. If fewer than 10 safe questions exist, state the actual count before
+   starting. If none exist, show an actionable empty state, such as adding more
+   distinct words or clearing the tag filter. Do not manufacture choices.
+4. Persist the generated questions and their answer keys before exposing the
+   session. Shuffle with a server-generated seed or persist the shuffled
+   snapshot. A question's prompt, choices, expected answer and source word
+   snapshot remain stable if a word is edited while the session is active.
+
+For comparison, trim and apply Unicode NFKC and lowercase consistently with
+the existing word normalization; define punctuation and whitespace treatment
+per mode and show the expected spelling in feedback. Do not use fuzzy matching
+or silently accept synonyms for a question expecting a specific word. For
+letter tiles, track tile instance IDs so repeated letters are independently
+selectable. Design around words that have multiple senses: the stored meaning
+and tag describe the intended sense, not a universal linguistic truth.
+
+#### Proposed persistence
+
+Use additive Drizzle migrations and UTC ISO timestamps; do not alter existing
+words, reviews, or timer rows. The names and fields below describe the intended
+contract; refine them during implementation without changing the user-visible
+invariants.
+
+- `practice_sessions`: UUID `id`, `status` (`active`, `completed`, or
+  `abandoned`), filter/selection settings, `started_at`, nullable `ended_at`,
+  and planned question count. Enforce at most one `active` row using a
+  database-level partial unique index appropriate to SQLite/libSQL.
+- `practice_questions`: UUID `id`, `session_id` foreign key, zero-based
+  `position`, exercise type, nullable source `word_id`, and a versioned JSON
+  snapshot containing prompt, choices, answer key and feedback content. Enforce
+  unique `(session_id, position)`. Use `ON DELETE SET NULL` for the source word
+  if deletion is supported later; the snapshot remains sufficient for resume.
+- `practice_attempts`: UUID `id`, `question_id` foreign key with a unique
+  constraint, submitted answer or explicit skip, server-evaluated outcome
+  (`correct`, `incorrect`, or `skipped`), and `answered_at`. Do not record a
+  new attempt every time a client retries the same submission.
+
+The server is the authority for question eligibility, progression and
+correctness. Do not expose private database credentials, use client-provided
+correctness flags, or treat a client timer as trusted state. Practice is
+owner-only: the assistant bearer key does not grant access to practice data.
+
+#### Proposed API and state transitions
+
+Routes are illustrative and should follow the existing Next.js route-handler,
+owner-session and same-origin patterns:
+
+- `POST /api/practice/sessions`: validate filters, generate a safe question
+  set, and create the session and questions atomically. Return the session ID,
+  planned count and first question. Return a clear empty-eligibility response
+  when no questions can be built, or `409` with the active session ID when
+  another session already exists.
+- `GET /api/practice/sessions/:id`: return session status, progress and current
+  question or completed summary. Fetching an unknown session returns `404`.
+  Do not expose answer keys in an unanswered question's response.
+- `POST /api/practice/sessions/:id/answers`: accept a question ID and a
+  mode-appropriate answer or explicit skip. In one transaction check the
+  active session and current position, validate and grade against the saved
+  answer key, insert the attempt, and return feedback and the next question or
+  completion summary. A duplicate submission of the same answer returns the
+  existing result; a conflicting or out-of-order answer returns `409`. Skip
+  records `skipped`, never `correct`.
+- `POST /api/practice/sessions/:id/finish`: finish early as `completed` or
+  explicitly abandon as `abandoned`; return the persisted status and summary.
+  Repeating the same terminal action is safe; conflicting terminal actions
+  return `409`. Handle two tabs or lost responses without duplicate attempts.
+
+On the last accepted answer, atomically transition `active` to `completed`.
+An early finish leaves unanswered questions unanswered; an abandoned session
+retains its attempts but is not reported as completed. Report server errors
+explicitly and keep the current input available for retry. The client must not
+show an answer as saved until the server confirms it.
+
+#### UX, accessibility and privacy
+
+- Design a responsive, mobile-first practice screen with one focused prompt,
+  large touch targets, visible progress (`answered / planned`), a back/finish
+  control, feedback, and a concise completion summary. Retain the existing
+  navigation and adapt to desktop widths.
+- Make every interaction usable with a keyboard and screen reader. Provide
+  visible focus, accessible labels, non-color-only feedback, logical focus
+  movement, and reduced-motion behavior. Letter tiles must have a keyboard
+  alternative; any animation must be optional and non-blocking.
+- An image is optional enrichment, never the sole way to complete a session.
+  Show a safe fallback for missing or broken images and preserve attribution.
+  External image requests reveal the viewer's IP address to the image host.
+- Keep practice records private and avoid logging answer payloads or
+  credentials. Cap request and answer sizes, validate all identifiers and
+  payloads, and apply same-origin checks to every mutation.
+
+### Phase 0: Product and interaction validation
+
+**Goal:** validate the experience before building persistence or changing
+existing review behavior.
+
+- Sketch the entry point, session setup, question, feedback, resume, early-finish
+  and summary states using Fern's existing styling.
+- Review the exercise catalogue against real saved words: check meaning
+  overlap, short collections, sentences without an exact target, phrase tags,
+  repeated letters and image availability.
+- Confirm with the owner whether practice should remain separate from review
+  scheduling and the daily timer, and whether the proposed 10-question limit
+  and exercise priority are desirable. These are defaults, not existing
+  behavior.
+- Define the accessible text alternative and test the proposed experience on
+  narrow mobile screens and desktop.
+
+**Exit:** agreed scope and exercise priorities, identified data limitations,
+and explicit decisions on review/timer integration. Do not implement review
+integration without that decision.
+
+### Phase 1: Practice engine and persistence
+
+**Goal:** a reliable, resumable practice session backed by existing words.
+
+- Add versioned schema/migrations for sessions, questions and attempts; test a
+  migration from a populated database without modifying existing word/review
+  data. Implement transactional creation, grading and state transitions.
+- Add pure, testable eligibility, selection and grading helpers for meaning
+  and word choice. Persist all selected question data and validate the shape of
+  each versioned snapshot before use.
+- Implement the owner-authenticated routes above, including same-origin
+  protections, request validation, session conflict handling, retry-safe
+  submissions, and explicit empty/error responses.
+- Use a simple internal or minimal UI flow to start, answer, skip, resume and
+  finish a session; leave the existing `/review` and study timer unchanged.
+
+**Exit:** a session survives refresh, rejects cross-session/out-of-order
+answers, grades server-side, has no duplicate attempts on retries, and leaves
+existing review counts, streaks and schedules unchanged.
+
+### Phase 2: Polished core practice experience
+
+**Depends on:** Phase 1.
+
+- Add the Practice navigation entry and a session setup screen with collection,
+  tag and optional due-priority controls. Explain the actual question count
+  and let users resume or abandon the existing session.
+- Build reusable question, choice, feedback, progress and summary components.
+  Present meaning-choice and word-choice exercises with explicit correct,
+  incorrect and skipped states. Show the correct answer after submission.
+- Add spelling exercises with repeated-letter-safe tile selection and the
+  keyboard/text-input alternative. Restrict unsuitable words and fall back to
+  other eligible modes rather than hiding or corrupting characters.
+- Show completed, early-finished, abandoned, loading, insufficient-data and
+  network-error states. Support retry without silently losing input.
+
+**Exit:** the full setup-to-summary flow works on mobile and desktop, all
+controls are keyboard accessible, and a session with eligible words can be
+completed or resumed without impacting existing review.
+
+### Phase 3: More exercise variety
+
+**Depends on:** Phase 2.
+
+- Add sentence completion using safe exact matching, preserving the original
+  `in_a_sentence` independently from `example`. Use word tiles as an
+  alternative to conventional choice buttons, without requiring dragging.
+- Add synonym and antonym exercises only where choices are defensible using
+  saved data. When correctness is uncertain, omit that question rather than
+  generating plausible-looking but potentially valid distractors.
+- Add picture choice only for collections with enough suitable, distinct
+  images. Detect failed browser loads and switch to an eligible text mode
+  without recording an incorrect response. Persist any replacement before
+  continuing so refresh remains consistent.
+- Exercise selection balances available modes without blocking a small or
+  partially populated collection. Preserve original questions and results for
+  already answered items.
+
+**Exit:** each enabled mode has tests for eligibility and ambiguous data;
+missing images, unrelated synonyms, absent exact sentence matches and small
+collections never yield a misleading or unanswerable question.
+
+### Phase 4: Practice progress and optional timed flow
+
+**Depends on:** Phase 2; Phase 3 is optional.
+
+- Add practice-specific dashboard summaries derived from persisted attempts:
+  completed sessions, answered questions, correct, incorrect and skipped.
+  Accuracy is `correct / (correct + incorrect)`; show no percentage when the
+  denominator is zero. Keep practice activity distinct from review streaks.
+- Convert UTC timestamps to the configured IANA time zone for daily summaries,
+  and test dates across local midnight and daylight-saving transitions.
+- Only after owner approval, consider a timed practice mode or explicit
+  connection to the existing five-minute timer. Specify pause/resume,
+  backgrounding, refresh, midnight, expiry and early-exit behavior before
+  implementing. The current daily timer is a separate, once-per-day server
+  record, not a practice-session countdown.
+- Consider audio, adaptive difficulty, multiple senses, or imported
+  practice-specific media later, with separate design and licensing decisions.
+
+**Exit:** summaries reconcile with stored attempts across time zones, clearly
+label practice versus reviews, and do not silently change the daily timer or
+review streak.
+
+### Verification and rollout checklist
+
+- Unit tests: normalization, duplicate and ambiguous choices, eligibility,
+  no-image cases, repeated graphemes, exact sentence boundaries, all tags and
+  untagged words, and progress calculations.
+- Route/integration tests: authentication and same-origin rejection, migration
+  from existing data, create/resume/finish, simultaneous starts, double-submit
+  and lost-response retries, skipped/invalid/out-of-order answers, edited or
+  removed source words, database errors, and terminal-state conflicts.
+- UX checks: touch and keyboard use, screen-reader labels and feedback,
+  contrast, reduced motion, narrow viewports, broken images, refresh, offline
+  recovery and a collection too small for a given mode.
+- Regression checks: existing word import and editing, review scheduling,
+  streaks, daily timer and owner access remain unchanged. Run the existing
+  lint, typecheck, test and build commands.
+- Deploy additive migrations to the intended development database first,
+  verify backups and restore procedures, then migrate the intended production
+  Turso database before enabling the UI. Verify the actual configured target;
+  do not assume a local migration updated the remote database. If rollout is
+  interrupted, leave existing review available and disable the new entry point
+  until the schema and application version are compatible.
+
 ## Owner interface
 
 - **Sign-in:** authenticate and reject accounts other than the owner.
